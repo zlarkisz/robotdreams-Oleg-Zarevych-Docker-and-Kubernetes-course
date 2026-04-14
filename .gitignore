@@ -1,1 +1,8 @@
-.DS_Store
+.env              ← секрети, токени
+
+node_modules/     ← залежності
+
+.DS_Store         ← системні файли macOS
+**/.DS_Store
+
+*.log             ← логи.DS_Store
