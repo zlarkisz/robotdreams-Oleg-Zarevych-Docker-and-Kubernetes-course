@@ -1,0 +1,74 @@
+# Docker Compose файл для запуску course-app з Redis як зовнішнім сховищем
+# Compose V2 — версія схеми не вказується явно, використовується актуальний формат
+
+# services: — це список контейнерів які Docker Compose запустить
+# Кожен сервіс = один контейнер
+# У нас два сервіси: course-app (наш застосунок) і redis (сховище даних)
+services:
+
+  # --- Сервіс 1: course-app ---
+  # FastAPI застосунок на Python, слухає порт 8080
+  course-app:
+
+    # build: . — збудувати образ з Dockerfile в поточній директорії
+    # Крапка "." означає "шукай Dockerfile тут"
+    # Альтернатива: image: назва — завантажити готовий образ з Docker Hub
+    build: .
+
+    # ports: — прокидає порт контейнера назовні на хост-машину
+    # Формат: "HOST_PORT:CONTAINER_PORT"
+    # "8080:8080" — порт 8080 на твоєму Mac → порт 8080 всередині контейнера
+    # Після запуску застосунок доступний на http://localhost:8080
+    ports:
+      - "8080:8080"
+
+    # environment: — змінні середовища які передаються в контейнер
+    # Застосунок читає їх через os.getenv() в Python
+    # Аналогія: як .env файл у Nuxt/Vue проєкті
+    environment:
+
+      # Перемикає бекенд сховища з sqlite (за замовчуванням) на redis
+      # Застосунок читає: STORE_BACKEND = os.getenv("APP_STORE", "sqlite")
+      APP_STORE: redis
+
+      # URL підключення до Redis
+      # Формат: redis://HOST:PORT/DB_NUMBER
+      # "redis"    — ім'я сервісу нижче, Docker Compose автоматично резолвить його в IP
+      #              (НЕ localhost! localhost = сам контейнер course-app, а не redis)
+      # "6379"     — стандартний порт Redis
+      # "/0"       — номер бази даних (Redis має 16 баз: 0-15, за замовчуванням 0)
+      APP_REDIS_URL: redis://redis:6379/0
+
+    # depends_on: — вказує що redis має запуститись ПЕРЕД course-app
+    # Без цього course-app може стартувати раніше ніж redis буде готовий
+    # Увага: чекає лише поки контейнер запустився, не поки Redis готовий до з'єднань
+    depends_on:
+      - redis
+
+
+  # --- Сервіс 2: redis ---
+  # Зовнішнє сховище даних — використовується замість вбудованого SQLite
+  redis:
+
+    # image: — завантажити готовий образ з Docker Hub
+    # Для redis немає свого Dockerfile — беремо офіційний образ
+    # "redis:alpine" — офіційний образ Redis на Alpine Linux (мінімальний розмір)
+    image: redis:alpine
+
+    # volumes: — підключає volume до контейнера для збереження даних
+    # Без volume — всі дані Redis зникнуть після docker compose down
+    # Формат: "VOLUME_NAME:PATH_IN_CONTAINER"
+    # "redis_data" — ім'я нашого named volume (оголошений нижче в блоці volumes:)
+    # "/data"      — стандартна директорія де Redis зберігає дані всередині контейнера
+    volumes:
+      - redis_data:/data
+
+
+# volumes: — оголошення named volumes які використовуються в цьому Compose файлі
+# Named volume — Docker сам керує де фізично зберігаються дані на хості
+# Фізично знаходиться всередині Docker Desktop VM:
+# /Users/zlarkisz/Library/Containers/com.docker.docker/Data/vms/0/data/docker/volumes/
+# Переглянути: docker volume ls
+# Детальніше: docker volume inspect redis_data
+volumes:
+  redis_data:
