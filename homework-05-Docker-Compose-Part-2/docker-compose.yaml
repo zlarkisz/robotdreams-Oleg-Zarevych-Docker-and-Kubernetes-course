@@ -1,0 +1,85 @@
+# Docker Compose файл для запуску course-app з Redis як зовнішнім сховищем
+# У цій домашці додано: healthcheck, залежність за здоров'ям, том appdata
+# Compose V2 — версія схеми не вказується явно
+
+# services: — список контейнерів які Compose запустить
+# У нас два сервіси: course-app (застосунок) і redis (сховище)
+services:
+  # --- Сервіс 1: course-app ---
+  # FastAPI застосунок на Python, слухає порт 8080
+  course-app:
+    # build: . — збудувати образ з Dockerfile в поточній директорії
+    # Крапка = "шукай Dockerfile тут"
+    # Альтернатива: image: nginx — завантажити готовий образ з Docker Hub
+    build: .
+
+    # ports: — прокидає порт контейнера назовні на хост
+    # Формат: "HOST_PORT:CONTAINER_PORT"
+    # "8080:8080" — порт 8080 на Mac → порт 8080 всередині контейнера
+    # Лапки обов'язково — щоб YAML не спробував парсити як число/sexagesimal
+    ports:
+      - "8080:8080"
+
+    # environment: — змінні середовища в контейнер (формат словник)
+    # Застосунок читає їх через os.getenv() в Python
+    # Аналогія: як .env файл у Nuxt/Vue проєкті
+    environment:
+      # Перемикає бекенд сховища з sqlite (дефолт) на redis
+      APP_STORE: redis
+      # URL підключення до Redis: redis://HOST:PORT/DB_NUMBER
+      # "redis" — ім'я сервісу нижче, Compose резолвить його в IP через внутрішній DNS
+      # (НЕ localhost! localhost = сам контейнер course-app)
+      # "/0" — номер бази Redis (16 баз: 0-15, за замовчуванням 0)
+      APP_REDIS_URL: redis://redis:6379/0
+
+    # healthcheck: — періодична перевірка "чи застосунок реально живий?"
+    # Docker виконує test всередині контейнера і позначає status: healthy/unhealthy
+    healthcheck:
+      # curl -f — якщо HTTP 4xx/5xx, exit code != 0 = фейл для Docker
+      # localhost = контейнер сам себе перевіряє (curl вже встановлено в Dockerfile)
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 10s # перевіряти кожні 10 секунд
+      timeout: 3s # максимальний час відповіді /healthz
+      retries: 3 # 3 фейли поспіль → status: unhealthy
+      start_period: 10s # пільговий час на прогрів uvicorn (фейли не рахуються)
+
+    # depends_on: — керує порядком запуску
+    # condition: service_healthy — чекати поки healthcheck Redis пройде ✅
+    # (простий "- redis" чекав би лише запуску процесу, не готовності)
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # --- Сервіс 2: redis ---
+  # In-memory сховище для лічильника відвідувань
+  redis:
+    # image: — готовий офіційний образ з Docker Hub
+    # alpine-варіант ~40 MB (повний redis:7 ~180 MB)
+    image: redis:alpine
+
+    # healthcheck для Redis через вбудовану redis-cli
+    # ping → PONG = живий; будь-яка інша відповідь або таймаут = unhealthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s # Redis стартує швидше ніж Python-застосунок
+
+    # volumes: — підключення named volume до контейнера
+    # Формат: "VOLUME_NAME:PATH_IN_CONTAINER"
+    # "appdata" — ім'я named volume (оголошений нижче)
+    # "/data"   — стандартна директорія Redis для dump.rdb (snapshot)
+    # Без цього тому — всі дані зникнуть після docker compose down
+    volumes:
+      - appdata:/data
+
+# volumes: — декларація named volumes які використовуються в сервісах
+# Обов'язково для named volumes (bind-mounts типу ./data:/data декларувати не треба)
+# Порожня декларація = "створи з дефолтними опціями"
+# Docker Desktop на macOS фізично зберігає у VM:
+# ~/Library/Containers/com.docker.docker/Data/vms/0/data/docker/volumes/
+# Переглянути: docker volume ls
+# Деталі:      docker volume inspect <project>_appdata
+volumes:
+  appdata:
