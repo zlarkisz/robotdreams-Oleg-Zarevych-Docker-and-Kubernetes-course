@@ -1,0 +1,73 @@
+# Docker Stack файл для Swarm-деплойменту course-app
+# Відрізняється від docker-compose.yaml такими моментами:
+# - image замість build (Swarm не вміє білдити)
+# - секція deploy описує як оркеструвати сервіс
+# - depends_on прибрано (Swarm його ігнорує)
+
+services:
+  # --- course-app ---
+  course-app:
+    # Локально зібраний образ (див. docker build -t course-app:local)
+    image: course-app:local
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      APP_STORE: redis
+      APP_REDIS_URL: redis://redis:6379/0
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+    # deploy: — специфічна для Swarm секція оркестрації
+    deploy:
+      # replicas: — скільки копій сервісу тримати запущеними
+      # Swarm сам розподілить їх по доступних нодах
+      replicas: 2
+
+      # restart_policy: — що робити якщо контейнер впав
+      # condition: on-failure — перезапускати лише при ненульовому exit code
+      # (варіанти: none/on-failure/any)
+      restart_policy:
+        condition: on-failure
+        delay: 5s # пауза перед перезапуском
+        max_attempts: 3 # скільки разів спробувати перезапустити
+
+      # update_config: — поведінка при rolling update
+      # (коли робиш docker service update або новий deploy з іншим образом)
+      update_config:
+        parallelism: 1 # оновлювати по 1 реплиці за раз (zero-downtime)
+        delay: 10s # пауза між оновленнями реплик
+        order:
+          start-first # спочатку стартуй нову, потім зупини стару
+          # (альтернатива: stop-first — спершу вбити стару)
+
+  # --- redis ---
+  redis:
+    image: redis:alpine
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+    volumes:
+      - appdata:/data
+
+    deploy:
+      # Для БД — тільки 1 репліка!
+      # Дві реплики Redis з одним томом = гарантована катастрофа
+      # (обидві писатимуть в один /data/dump.rdb, пошкодять дані)
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+volumes:
+  appdata:
