@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  APP_VERSION: "v2"
+  WELCOME_MESSAGE: "Hello from ConfigMap v2"
+  index.html: |
+    <!DOCTYPE html>
+    <html>
+      <head><title>ConfigMap demo</title></head>
+      <body style="font-family: sans-serif; padding: 40px;">
+        <h1>Версія: v2</h1>
+        <p>Це сторінка з ConfigMap (volume mount).</p>
+      </body>
+    </html>
