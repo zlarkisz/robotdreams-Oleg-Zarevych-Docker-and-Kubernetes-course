@@ -1,0 +1,88 @@
+# ============================================================
+# Крок 4 — Zero Downtime тест (фінальна, надійна версія)
+#
+# Історія спроб:
+#   - postStart хук     → race condition, файл не встигав
+#   - ConfigMap+sed     → ConfigMap монтується read-only, не зламати
+#   - цей варіант       → readinessProbe типу exec перевіряє
+#                         файл-прапорець у ЗАПИСУВАНОМУ emptyDir
+#
+# Ідея:
+#   emptyDir /flag — записувана тимчасова тека в поді
+#   postStart створює там файл ready
+#   readinessProbe (exec) перевіряє: чи існує /flag/ready ?
+#   livenessProbe (httpGet /) — окремо, перевіряє що nginx живий
+#
+# Тест:
+#   rm /flag/ready у поді → readiness exec fail → под 0/1, зник з Endpoints
+#   livenessProbe на / досі 200 → контейнер НЕ перезапускається
+#   touch /flag/ready назад → под знову 1/1, IP повертається
+#
+# /flag — emptyDir, тому ЗАПИСУВАНИЙ (на відміну від ConfigMap).
+# ============================================================
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-app
+  namespace: homework-08
+  labels:
+    app: nginx-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx-app
+  template:
+    metadata:
+      labels:
+        app: nginx-app
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+
+          # записувана тимчасова тека під файл-прапорець
+          volumeMounts:
+            - name: flag
+              mountPath: /flag
+
+          # при старті створюємо прапорець готовності
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh", "-c", "touch /flag/ready"]
+
+          # LIVENESS — HTTP GET / : "nginx живий?"
+          # / у дефолтному nginx завжди віддає 200.
+          # Цю пробу НЕ чіпаємо у тесті.
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+            successThreshold: 1
+
+          # READINESS — exec: "чи існує файл-прапорець /flag/ready?"
+          # test -f повертає exit 0 якщо файл є, exit 1 якщо нема.
+          # rm /flag/ready → exit 1 → readiness fail → под 0/1.
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "/flag/ready"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+            successThreshold: 1
+
+      volumes:
+        - name: flag
+          emptyDir: {}

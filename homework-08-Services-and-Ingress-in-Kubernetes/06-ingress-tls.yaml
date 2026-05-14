@@ -1,0 +1,51 @@
+# ============================================================
+# Крок 5 — Ingress з HTTPS (TLS termination)
+#
+# Що змінилось порівняно з 04-ingress.yaml:
+#   1. додано секцію spec.tls — вмикає HTTPS для course-app.local,
+#      сертифікат береться з Secret course-app-tls
+#   2. додано анотацію ssl-redirect — HTTP автоматично
+#      перенаправляється на HTTPS (301)
+#
+# TLS termination відбувається на Ingress Controller:
+#   браузер --HTTPS--> Controller (розшифровує) --HTTP--> Service --> Pod
+#   поди nginx про TLS не знають, працюють на звичайному :80
+#
+# Залежить від:
+#   - Service nginx-app (ClusterIP, Крок 1)
+#   - Secret course-app-tls (створений: kubectl create secret tls ...)
+# ============================================================
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-app
+  namespace: homework-08
+  labels:
+    app: nginx-app
+  annotations:
+    # примусово перенаправляти HTTP → HTTPS (відповідь 301)
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+
+  # ----------------------------------------------------------
+  # TLS-секція: для яких хостів вмикати HTTPS і звідки брати сертифікат
+  # ----------------------------------------------------------
+  tls:
+    - hosts:
+        - course-app.local       # для якого домену діє сертифікат
+      secretName: course-app-tls # Secret з tls.crt + tls.key
+
+  rules:
+    - host: course-app.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nginx-app
+                port:
+                  number: 80
