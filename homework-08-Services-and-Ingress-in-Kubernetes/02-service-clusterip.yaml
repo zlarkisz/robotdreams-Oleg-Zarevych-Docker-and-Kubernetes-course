@@ -1,0 +1,29 @@
+# ============================================================
+# Крок 1 — Service: NodePort → ClusterIP
+#
+# Що змінилось порівняно з 01-base.yaml:
+#   - type: NodePort  →  type: ClusterIP
+#   - видалено nodePort: 30080 (його не існує в ClusterIP)
+#
+# Решта (selector, port, targetPort) — без змін.
+# Deployment не чіпаємо: він живе своїм життям.
+# ============================================================
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-app
+  namespace: homework-08
+  labels:
+    app: nginx-app
+spec:
+  type: ClusterIP          # ← було NodePort
+  selector:
+    app: nginx-app
+  ports:
+    - name: http
+      port: 80             # порт самого Service (всередині кластера)
+      targetPort: http     # порт пода (іменований, посилається на containerPort)
+      protocol: TCP
+      # nodePort більше немає — Service не виходить назовні

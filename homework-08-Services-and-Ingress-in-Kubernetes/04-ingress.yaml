@@ -1,0 +1,38 @@
+# ============================================================
+# Крок 3 — Ingress: маршрутизація за доменним ім'ям
+#
+# Ingress-ресурс описує ПРАВИЛО:
+#   запит на course-app.local  →  Service nginx-app:80  →  поди
+#
+# Працює тільки якщо в кластері є Ingress Controller
+# (ingress-nginx) — він читає це правило і виконує його.
+#
+# Залежить від: Service nginx-app (ClusterIP, Крок 1)
+# ============================================================
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-app
+  namespace: homework-08
+  labels:
+    app: nginx-app
+spec:
+  # який Ingress Controller обробляє це правило
+  ingressClassName: nginx
+
+  rules:
+    # для якого домену працює правило
+    - host: course-app.local
+      http:
+        paths:
+          # який URL-шлях матчимо
+          - path: /
+            pathType: Prefix        # Prefix = "починається з /" = всі шляхи
+            backend:
+              # куди відправляти трафік
+              service:
+                name: nginx-app     # Service з Кроку 1
+                port:
+                  number: 80        # порт Service (його spec.ports[].port)
