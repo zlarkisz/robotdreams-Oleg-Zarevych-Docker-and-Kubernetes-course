@@ -1,0 +1,111 @@
+# =============================================================================
+# Deployment: course-app
+# =============================================================================
+# Що таке Deployment:
+#   Високорівневий контролер K8s, який керує ЖИТТЄВИМ ЦИКЛОМ застосунку.
+#   Ти описуєш БАЖАНИЙ стан ("хочу 5 копій course-app:1.0.1"), а K8s сам
+#   розбирається як цього досягти і як підтримувати.
+#
+# Що Deployment робить під капотом:
+#   1. Створює ReplicaSet (контролер нижчого рівня)
+#   2. ReplicaSet створює і підтримує N подів за template
+#   3. При зміні spec (image, env) Deployment створює НОВИЙ ReplicaSet
+#      і поступово переводить поди старого → нового (rolling update)
+#   4. Старі ReplicaSet'и зберігаються (за замовчуванням 10) для rollback'у
+#
+# Ієрархія: Deployment → ReplicaSet → Pod → Container
+# =============================================================================
+#
+# ⚠️ ДОМАШКА 09 — Persistent Storage / Завдання 4
+#   Файл скопійовано з homework-06 і ОНОВЛЕНО: секцію env переведено з
+#   sqlite на redis, щоб course-app писав дані в Redis StatefulSet.
+#   Зміна env запускає rolling update — усі 5 подів course-app поступово
+#   замінюються на нові, вже з Redis-конфігом (maxUnavailable: 0 → без даунтайму).
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: course-app
+  labels:
+    app: course-app
+    component: backend
+
+spec:
+  # У завданні було 2 на старті, потім бампнуто до 5 (homework-06).
+  replicas: 5
+
+  selector:
+    matchLabels:
+      app: course-app
+      component: backend
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  template:
+    metadata:
+      labels:
+        app: course-app
+        component: backend
+        version: "1.0.1"
+
+    spec:
+      containers:
+        - name: course-app
+          image: zlarkisz/course-app:1.0.1
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "250m"
+
+          # -------------------------------------------------------------------
+          # env — змінні середовища контейнера
+          # -------------------------------------------------------------------
+          # ⚠️ Завдання 4: секцію оновлено — course-app переведено на Redis.
+          #    Було (homework-06):  APP_STORE: sqlite
+          #    Стало:               APP_STORE: redis + APP_REDIS_URL
+          #
+          # ⚠️ env-змінні НЕ оновлюються на льоту (на відміну від ConfigMap-
+          #    volume). Щоб зміна застосувалась — потрібен rolling update,
+          #    тобто обов'язковий `kubectl apply` після правки цього файлу.
+          env:
+            # APP_STORE — який backend сховища використовує course-app.
+            # redis → застосунок пише дані не в локальний sqlite-файл
+            # (який зник би з подом), а в зовнішній Redis StatefulSet,
+            # що тримає дані на persistent volume.
+            - name: APP_STORE
+              value: "redis"
+
+            # APP_REDIS_URL — адреса, за якою course-app знаходить Redis.
+            # Розбір redis://redis:6379:
+            #   redis://  — схема протоколу (з'єднання Redis)
+            #   redis     — ХОСТ = DNS-ім'я Service з redis-service.yaml
+            #               (metadata.name: redis). НЕ ім'я пода, НЕ IP!
+            #               Внутрішній DNS K8s резолвить його → под redis-0.
+            #   6379      — порт зі spec.ports.port у redis-service.yaml
+            #
+            # Чому ім'я Service, а не IP пода: под redis-0 може перестворитись
+            # з іншою IP — course-app цього не помітить, бо звертається за
+            # стабільним іменем. Саме для цього і потрібен був Service.
+            - name: APP_REDIS_URL
+              value: "redis://redis:6379"
+
+            # APP_MESSAGE — кастомний привіт на головній сторінці course-app.
+            # Лишаємо як було — наочне підтвердження, що env передається.
+            - name: APP_MESSAGE
+              value: "Course App in Kubernetes"

@@ -25,8 +25,13 @@
 
 ## Домашні завдання
 
-| #   | Завдання                                | Папка                                           | Статус      |
-| --- | --------------------------------------- | ----------------------------------------------- | ----------- |
-| 02  | Основи Docker                           | homework-02-docker-basics                       | ✅ Виконано |
-| 03  | Створення та управління Docker образами | homework-03-Creating-and-Managing-Docker-Images | ✅ Виконано |
-| 04  | Docker Compose (частина 1)              | homework-04-Docker-Compose-Part-1               | ✅ Виконано |
+| #   | Завдання                                 | Папка                                           | Статус      |
+| --- | ---------------------------------------- | ----------------------------------------------- | ----------- |
+| 02  | Основи Docker                            | homework-02-docker-basics                       | ✅ Виконано |
+| 03  | Створення та управління Docker образами  | homework-03-Creating-and-Managing-Docker-Images | ✅ Виконано |
+| 04  | Docker Compose (частина 1)               | homework-04-Docker-Compose-Part-1               | ✅ Виконано |
+| 05  | Docker Compose (частина 2)               | homework-05-Docker-Compose-Part-2               | ✅ Виконано |
+| 06  | Основи Kubernetes                        | homework-06-Kubernetes-Basics                   | ✅ Виконано |
+| 07  | Масштабування та оркестрація             | homework-07-Scaling-and-orchestration           | ✅ Виконано |
+| 08  | Service та Ingress у Kubernetes          | homework-08-Services-and-Ingress-in-Kubernetes  | ✅ Виконано |
+| 09  | Робота з Persistent Storage у Kubernetes | homework-09-Persistent-Storage                  | ✅ Виконано |
