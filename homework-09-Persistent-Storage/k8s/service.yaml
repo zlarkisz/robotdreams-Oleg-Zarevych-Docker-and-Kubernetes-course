@@ -1,0 +1,34 @@
+# =============================================================================
+# Service: course-app (NodePort)
+# =============================================================================
+# Дає застосунку course-app:
+#   - стабільну ClusterIP (поди ефемерні, IP змінюється — Service ні)
+#   - DNS-ім'я `course-app` всередині кластера
+#   - доступ ззовні через NodePort 30080 (http://localhost:30080)
+#   - балансування трафіку між подами через kube-proxy
+#
+# Скопійовано з homework-06 БЕЗ ЗМІН — у домашці 09 цей Service не міняється.
+# =============================================================================
+
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: course-app
+  labels:
+    app: course-app
+    component: backend
+
+spec:
+  type: NodePort
+
+  selector:
+    app: course-app
+    component: backend
+
+  ports:
+    - name: http
+      port: 80            # порт самого Service (ClusterIP, всередині кластера)
+      targetPort: http    # ім'я порту з deployment.yaml (containerPort 8080)
+      nodePort: 30080     # порт на хост-машині — http://localhost:30080
+      protocol: TCP
