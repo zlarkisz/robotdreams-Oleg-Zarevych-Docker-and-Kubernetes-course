@@ -1,0 +1,39 @@
+# =============================================================================
+# Service: course-app  (шаблонізований з homework-09/service.yaml)
+# =============================================================================
+# Дає застосунку стабільну точку доступу + DNS-ім'я в кластері.
+# Тип/порти винесені в values, бо змінюються між середовищами
+# (на prod часто ClusterIP+Ingress, на dev — NodePort для localhost).
+# =============================================================================
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: {{ include "course-app.fullname" . }}
+  labels:
+    {{- include "course-app.labels" . | nindent 4 }}
+
+spec:
+  # було: type: NodePort (хардкод) → параметр
+  type: {{ .Values.service.type }}
+
+  selector:
+    # ⚠️ Service знаходить поди за СЕЛЕКТОРОМ. Він мусить збігатися з
+    # template.metadata.labels у deployment.yaml. Тому той самий хелпер —
+    # збіг гарантовано, не треба синхронізувати руками.
+    {{- include "course-app.selectorLabels" . | nindent 4 }}
+
+  ports:
+    - name: http
+      # було: port: 80 (хардкод) → параметр
+      port: {{ .Values.service.port }}
+      # targetPort: http — ім'я порту з deployment.yaml (НЕ число).
+      # Іменована форма: зміниться container.port — Service не чіпати.
+      targetPort: http
+      protocol: TCP
+      {{- if eq .Values.service.type "NodePort" }}
+      # nodePort додаємо ТІЛЬКИ якщо type=NodePort.
+      # if ... end: на ClusterIP/LoadBalancer цей рядок зайвий і викликав би
+      # помилку — умова прибирає його з фінального маніфесту автоматично.
+      nodePort: {{ .Values.service.nodePort }}
+      {{- end }}
