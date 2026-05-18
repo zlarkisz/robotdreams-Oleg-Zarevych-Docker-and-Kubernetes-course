@@ -1,0 +1,10 @@
+# Файли, які НЕ потрапляють у запакований чарт (helm package).
+# Аналог .gitignore / .dockerignore.
+.DS_Store
+.git/
+.gitignore
+*.tmp
+*.bak
+*.swp
+screenshots/
+README-notes.md

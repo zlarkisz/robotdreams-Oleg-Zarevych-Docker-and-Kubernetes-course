@@ -1,0 +1,63 @@
+# =============================================================================
+# values.yaml — значення за замовчуванням для чарту course-app
+# =============================================================================
+# Принцип: усе, що МОЖЕ змінитися при розгортанні в іншому середовищі,
+# виноситься СЮДИ. У шаблонах (templates/*) хардкоду не лишається.
+# =============================================================================
+
+# replicaCount — було replicas: 5 (хардкод у homework-09)
+replicaCount: 5
+
+# image — розбито на repository + tag (легко перевизначити при релізі)
+image:
+  repository: zlarkisz/course-app # було: zlarkisz/course-app:1.0.1
+  tag: "1.0.1" # у лапках — щоб 1.0 не стало числом 1
+  pullPolicy: IfNotPresent
+
+# -----------------------------------------------------------------------------
+# app — env-змінні застосунку
+# -----------------------------------------------------------------------------
+app:
+  store: "redis" # APP_STORE
+  # КРОК 3: було "redis" (власний Redis з homework-09).
+  # Стало "redis-master" — Service Bitnami-чарту для READ/WRITE.
+  # НЕ redis-headless і НЕ redis-replicas: пишемо дані → потрібен master.
+  redisHost: "redis-master" # APP_REDIS_URL host
+  redisPort: 6379 # APP_REDIS_URL port
+  message: "Course App in Kubernetes" # APP_MESSAGE
+  # КРОК 3: Bitnami Redis за замовчуванням іде з auth. Образ course-app:1.0.1
+  # будує конект лише з APP_REDIS_URL і не читає окрему змінну пароля,
+  # тому Redis розгорнуто з auth.enabled=false (свідомий вибір для навчальної
+  # домашки — описано в README). Якщо ввімкнути auth назад — постав enabled:true:
+  # пароль підтягнеться з K8s Secret через secretKeyRef (шаблон це вже вміє).
+  redisAuth:
+    enabled: false
+    secretName: "redis" # ім'я Secret від Bitnami-релізу
+    secretKey: "redis-password" # ключ усередині Secret
+
+# container — порт застосунку всередині пода (було containerPort: 8080)
+container:
+  port: 8080
+
+# service — було type NodePort, port 80, nodePort 30080
+service:
+  type: NodePort # ClusterIP / NodePort / LoadBalancer
+  port: 80 # порт Service всередині кластера
+  nodePort: 30080 # порт на хості (лише для NodePort)
+
+# ingress — enabled вимикає весь ресурс; host був хардкодом course-app.local
+ingress:
+  enabled: true
+  className: nginx
+  host: course-app.local
+  path: /
+  pathType: Prefix
+
+# resources — винесено, бо квоти різні між середовищами
+resources:
+  requests:
+    memory: "32Mi"
+    cpu: "50m"
+  limits:
+    memory: "128Mi"
+    cpu: "250m"
