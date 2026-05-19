@@ -1,0 +1,75 @@
+# =============================================================================
+# Dragonfly Custom Resource (CR)
+# -----------------------------------------------------------------------------
+# Це НЕ вбудований тип Kubernetes. Тип "Dragonfly" з'явився в кластері тільки
+# після встановлення Dragonfly Operator (він приніс CRD —
+# CustomResourceDefinition "dragonflies.dragonflydb.io").
+#
+# Цей файл описує лише БАЖАНИЙ стан ("хочу базу з такими параметрами").
+# Сам по собі він нічого не запускає. Коли ми зробимо `kubectl apply`,
+# об'єкт збережеться в etcd, а контролер оператора (reconciliation loop)
+# побачить його і створить реальні ресурси: StatefulSet, Pods, Service.
+# =============================================================================
+
+# apiVersion = GROUP/VERSION з виводу `kubectl explain dragonfly`
+#   GROUP   : dragonflydb.io   (саме цю групу вкажемо в RBAC, Завдання 2)
+#   VERSION : v1alpha1         (alpha = API ще може змінюватись між версіями)
+apiVersion: dragonflydb.io/v1alpha1
+
+# kind = KIND з `kubectl explain`. Тип об'єкта, який створюємо.
+kind: Dragonfly
+
+metadata:
+  # Ім'я цього інстансу БД. Довільне. За ним звертатимемось далі:
+  #   kubectl get dragonfly dragonfly-db
+  # Оператор використає це ім'я як префікс для дочірніх ресурсів
+  # (Pods, Service називатимуться dragonfly-db-*).
+  name: dragonfly-db
+
+  # Namespace, де житиме база. Кладемо в `default` свідомо:
+  # тут же розгорнутий course-app, а в Kubernetes Service резолвиться
+  # коротким ім'ям лише в межах свого namespace (знадобиться в Завданні 1.6).
+  namespace: default
+
+spec:
+  # ---------------------------------------------------------------------------
+  # spec = DragonflySpec, "desired state" (дослівно з опису в kubectl explain).
+  # Сюди пишемо МИ. Поле status (фактичний стан) заповнює контролер — його
+  # руками не чіпаємо.
+  # ---------------------------------------------------------------------------
+
+  # replicas — ОБОВ'ЯЗКОВЕ поле.
+  # У виводі `kubectl explain dragonfly.spec` біля нього НЕ було позначки
+  # "(Optional)" — на відміну від решти полів. Відсутність "(Optional)" =
+  # поле обов'язкове.
+  #
+  # ВАЖЛИВО (дослівно з explain): "total number of Dragonfly instances
+  # INCLUDING the master". Тобто:
+  #   replicas: 1  -> лише master, без реплікації
+  #   replicas: 2  -> 1 master + 1 replica   <-- наш вибір
+  #   replicas: 3  -> 1 master + 2 replicas
+  # Беремо 2 — мінімум, щоб реально побачити роботу operator pattern:
+  # реплікацію та автоматичний failover між master і replica.
+  replicas: 2
+
+  # image — ОБОВ'ЯЗКОВЕ поле (теж без "(Optional)" у explain).
+  # Офіційний образ Dragonfly. Тег latest для навчальної роботи прийнятний;
+  # у продакшні краще фіксувати конкретну версію (напр. :v1.37.0) заради
+  # відтворюваності — той самий принцип, що й pinning версій у package.json.
+  image: docker.dragonflydb.io/dragonflydb/dragonfly:latest
+
+  # resources — ОПЦІЙНЕ поле (у explain було "(Optional)").
+  # Додаємо свідомо, хоч і не зобов'язані. Причина: локальний кластер
+  # (Docker Desktop, один вузол, обмежена RAM). База даних без лімітів може
+  # з'їсти забагато пам'яті й покласти інші поди.
+  #   requests — скільки гарантовано зарезервувати (планувальник орієнтується
+  #              на це число, коли вирішує, на який вузол ставити под)
+  #   limits   — стеля, понад яку контейнеру не дадуть (перевищення CPU =
+  #              throttling, перевищення memory = OOMKill)
+  resources:
+    requests:
+      cpu: "100m"        # 100m = 0.1 ядра CPU
+      memory: "256Mi"
+    limits:
+      cpu: "500m"        # 500m = 0.5 ядра CPU
+      memory: "512Mi"
