@@ -1,0 +1,108 @@
+# =============================================================================
+# values.yaml — значення за замовчуванням для чарту course-app
+# =============================================================================
+# Принцип: усе, що МОЖЕ змінитися при розгортанні в іншому середовищі,
+# виноситься СЮДИ. У шаблонах (templates/*) хардкоду не лишається.
+#
+# homework-11: ЦЕ ЄДИНИЙ ФАЙЛ ЧАРТУ З ЗМІСТОВИМИ ПРАВКАМИ цієї домашки.
+#   1) app.redisHost: redis-master → dragonfly-db (course-app тепер ходить
+#      у Dragonfly, розгорнутий через operator pattern).
+#   2) ingress.enabled: true → false (див. коментар біля блоку ingress).
+# Жоден шаблон у templates/ не чіпали — у цьому і є сенс шаблонізації
+# з попередньої домашки: середовище міняється через values, не через код.
+# =============================================================================
+
+# replicaCount — було replicas: 5 (хардкод у homework-09)
+replicaCount: 5
+
+# image — розбито на repository + tag (легко перевизначити при релізі)
+image:
+  repository: zlarkisz/course-app # було: zlarkisz/course-app:1.0.1
+  tag: "1.0.1" # у лапках — щоб 1.0 не стало числом 1
+  pullPolicy: IfNotPresent
+
+# -----------------------------------------------------------------------------
+# app — env-змінні застосунку
+# -----------------------------------------------------------------------------
+app:
+  store: "redis" # APP_STORE
+  # ---------------------------------------------------------------------------
+  # redisHost — ГОЛОВНА ЗМІНА homework-11.
+  #
+  #   homework-09: "redis"         (власний Redis-под)
+  #   homework-10: "redis-master"  (Service Bitnami-чарту)
+  #   homework-11: "dragonfly-db"  (Service, який створив Dragonfly Operator
+  #                                 для нашого Dragonfly-інстансу)
+  #
+  # course-app НЕ помічає підміни: Dragonfly реалізує той самий
+  # Redis wire-протокол і слухає той самий порт 6379. Для застосунку це
+  # просто "хост:порт, куди я говорю мовою Redis".
+  #
+  # Ім'я "dragonfly-db" = metadata.name з manifests/dragonfly.yaml.
+  # Оскільки course-app і Dragonfly в одному namespace (default),
+  # достатньо короткого імені Service (повне DNS:
+  # dragonfly-db.default.svc.cluster.local).
+  #
+  # ✅ ПІДТВЕРДЖЕНО `kubectl get svc | grep dragonfly`:
+  #      dragonfly-db   ClusterIP   10.100.190.34   6379/TCP
+  #    Оператор створив Service саме з ім'ям dragonfly-db на порту 6379,
+  #    тому значення нижче коректне без змін.
+  # ---------------------------------------------------------------------------
+  redisHost: "dragonfly-db" # APP_REDIS_URL host  (homework-11: → Dragonfly)
+  redisPort: 6379 # APP_REDIS_URL port (Dragonfly теж слухає 6379)
+  message: "Course App in Kubernetes" # APP_MESSAGE
+  # Dragonfly у цій домашці піднято БЕЗ автентифікації (spec без
+  # authentication у dragonfly.yaml) — так само, як Bitnami Redis у
+  # homework-10 був з auth.enabled=false. Тому блок паролю неактивний.
+  # Якщо додаси auth у Dragonfly — постав enabled: true, і пароль
+  # підтягнеться з K8s Secret через secretKeyRef (шаблон це вже вміє).
+  redisAuth:
+    enabled: false
+    secretName: "redis" # ім'я Secret (якщо вмикатимеш auth)
+    secretKey: "redis-password" # ключ усередині Secret
+
+# container — порт застосунку всередині пода (було containerPort: 8080)
+container:
+  port: 8080
+
+# service — було type NodePort, port 80, nodePort 30080
+service:
+  type: NodePort # ClusterIP / NodePort / LoadBalancer
+  port: 80 # порт Service всередині кластера
+  nodePort: 30080 # порт на хості (лише для NodePort)
+
+# -----------------------------------------------------------------------------
+# ingress — enabled вимикає весь ресурс; host був хардкодом course-app.local
+# -----------------------------------------------------------------------------
+# homework-11: enabled true → FALSE. Причина (свідомий вибір, не помилка):
+#
+#   У цьому кластері НЕ встановлено контролер ingress-nginx
+#   (`kubectl get pods -n ingress-nginx` → No resources found).
+#   Через це створення Ingress падало на admission webhook:
+#     service "ingress-nginx-controller-admission" not found
+#
+#   Ingress лише дає ЗОВНІШНІЙ доступ (course-app.local) і НЕ стосується
+#   теми homework-11 (оператори/RBAC) та перевірки Завдання 1.6
+#   (переключення course-app на Dragonfly). Доступ до застосунку для
+#   перевірки робимо через `kubectl port-forward`.
+#
+#   Шаблон Ingress навмисно умовний ({{- if .Values.ingress.enabled }}),
+#   тому вимкнення прапорцем — штатний механізм чарту під середовище
+#   без ingress-nginx, а не правка коду. У homework-10 цей чарт
+#   лишається валідним з enabled: true.
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: false # homework-11: вимкнено, ingress-nginx відсутній (див. вище)
+  className: nginx
+  host: course-app.local
+  path: /
+  pathType: Prefix
+
+# resources — винесено, бо квоти різні між середовищами
+resources:
+  requests:
+    memory: "32Mi"
+    cpu: "50m"
+  limits:
+    memory: "128Mi"
+    cpu: "250m"

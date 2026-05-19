@@ -1,0 +1,81 @@
+# =============================================================================
+# RBAC для Custom Resource "Dragonfly"
+# -----------------------------------------------------------------------------
+# Завдання 2: створити "обмеженого спостерігача" — ServiceAccount, який
+# МОЖЕ дивитись на стан Dragonfly (get/list/watch), але НЕ може його
+# видалити чи переналаштувати.
+#
+# Три об'єкти в одному файлі, розділені "---":
+#   1. ServiceAccount  — "хто" (особа/бейдж)
+#   2. Role            — "що дозволено" (список прав)
+#   3. RoleBinding     — "зв'язок" (видати права цьому SA)
+# Без RoleBinding перші два існують, але НЕ пов'язані між собою.
+#
+# Принцип least privilege: даємо РІВНО стільки прав, скільки треба для
+# задачі (спостереження), і ні граму більше.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. ServiceAccount — "хто"
+# -----------------------------------------------------------------------------
+# Це ідентичність всередині кластера (на відміну від User — людини ззовні).
+# Сам по собі НЕ має жодних прав, поки не прив'язаний до Role.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: db-viewer
+  namespace: default          # той самий namespace, що й Dragonfly
+
+---
+# -----------------------------------------------------------------------------
+# 2. Role — "що дозволено"
+# -----------------------------------------------------------------------------
+# Role (а не ClusterRole), бо ресурс dragonflies namespaced (у kubectl
+# api-resources колонка NAMESPACED = true) — права діють у межах одного
+# namespace, цього достатньо.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: db-readonly
+  namespace: default
+rules:
+  # apiGroups — група API ресурсу. КЛЮЧОВИЙ момент для Custom Resource.
+  #   Узято з виводу `kubectl api-resources | grep dragonfly`:
+  #     dragonflies   dragonflydb.io/v1alpha1   true   Dragonfly
+  #   Частина до "/" в APIVERSION = група = "dragonflydb.io".
+  #   (Для вбудованих подів тут був би "" — порожня core-група.)
+  - apiGroups: ["dragonflydb.io"]
+
+    # resources — ім'я ресурсу У МНОЖИНІ (колонка NAME з api-resources),
+    # НЕ kind. Тобто "dragonflies", а не "Dragonfly" і не "dragonfly".
+    # Це найчастіша помилка в RBAC для CR.
+    resources: ["dragonflies"]
+
+    # verbs — дозволені дії. Тільки читання:
+    #   get   — прочитати один об'єкт
+    #   list  — прочитати список
+    #   watch — підписка на зміни (kubectl -w)
+    # НЕМАЄ delete/update/patch/create → SA фізично не може нашкодити.
+    verbs: ["get", "list", "watch"]
+
+---
+# -----------------------------------------------------------------------------
+# 3. RoleBinding — "зв'язок"
+# -----------------------------------------------------------------------------
+# Склеює: суб'єкт (db-viewer) ← отримує → права ролі (db-readonly).
+# Поки цього об'єкта нема — SA і Role існують, але SA безправний.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: db-viewer-binding
+  namespace: default
+subjects:
+  # КОМУ видаємо права
+  - kind: ServiceAccount
+    name: db-viewer
+    namespace: default
+roleRef:
+  # ЯКУ роль прив'язуємо (мусить уже існувати в цьому namespace)
+  kind: Role
+  name: db-readonly
+  apiGroup: rbac.authorization.k8s.io

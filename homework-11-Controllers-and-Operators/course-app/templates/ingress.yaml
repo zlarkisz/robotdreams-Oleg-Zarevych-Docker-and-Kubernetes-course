@@ -1,0 +1,37 @@
+# =============================================================================
+# Ingress: course-app  (шаблонізований з homework-08/04-ingress.yaml)
+# =============================================================================
+# Увесь файл обгорнутий в умову ingress.enabled.
+# Якщо ingress.enabled=false — Helm НЕ згенерує цей ресурс узагалі.
+#
+# Виправлено відносно homework-08:
+#   - було namespace: homework-08 (хардкод) — ПРИБРАНО (задається через -n).
+#   - було service name: nginx-app — тепер наш course-app Service.
+#   - було host course-app.local (хардкод) — тепер параметр.
+#
+# homework-11: файл скопійовано з homework-10 БЕЗ змін.
+# =============================================================================
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+
+metadata:
+  name: {{ include "course-app.fullname" . }}
+  labels:
+    {{- include "course-app.labels" . | nindent 4 }}
+
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: {{ .Values.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "course-app.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

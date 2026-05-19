@@ -1,0 +1,40 @@
+# =============================================================================
+# Chart.yaml — паспорт Helm-чарту
+# =============================================================================
+# Це метадані пакета. Helm читає цей файл, щоб зрозуміти ЩО це за чарт,
+# якої він версії і з яким Kubernetes сумісний.
+# Аналог package.json у npm: ім'я, версія, опис пакета.
+#
+# homework-11: чарт скопійовано з homework-10 БЕЗ зміни логіки шаблонів.
+# Єдина змістова правка цієї домашки — у values.yaml (redisHost тепер
+# вказує на Service Dragonfly замість Bitnami Redis). Опис і version
+# оновлено, щоб паспорт відповідав новому стану.
+# =============================================================================
+
+# apiVersion чарту (НЕ Kubernetes API!).
+#   v2 — сучасний формат Helm 3 (підтримує dependencies прямо тут).
+#   v1 — старий Helm 2, не використовуємо.
+apiVersion: v2
+
+# Ім'я чарту. Стає базою для імен ресурсів і релізу.
+name: course-app
+
+# Опис — показується в `helm search` / `helm show chart`.
+# homework-11: було "...integrates with Bitnami Redis" → тепер Dragonfly.
+description: Helm chart for course-app (Deployment + Service + Ingress), integrates with Dragonfly (Redis-compatible store via operator)
+
+# Тип чарту:
+#   application — чарт, що розгортає застосунок (наш випадок).
+#   library     — чарт-бібліотека спільних шаблонів (не наш випадок).
+type: application
+
+# version — версія САМОГО ЧАРТУ (структури шаблонів, values).
+# Підвищуємо, коли міняємо templates/ або values.yaml.
+# homework-11: було 0.1.0 → 0.2.0, бо змінили values.yaml (redisHost).
+# Формат — SemVer (обов'язково для Helm).
+version: 0.2.0
+
+# appVersion — версія ЗАСТОСУНКУ всередині (тег образу course-app).
+# Код застосунку НЕ змінювався — лишається 1.0.1.
+# У лапках, бо це рядок, а не число (1.0 інакше стане 1).
+appVersion: "1.0.1"

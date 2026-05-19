@@ -1,0 +1,82 @@
+# =============================================================================
+# Deployment: course-app  (шаблонізований з homework-09/deployment.yaml)
+# Усі змінні значення — з .Values; імена/лейбли — з _helpers.tpl.
+#
+# homework-11: ШАБЛОН НЕ ЗМІНЮВАВСЯ відносно homework-10. У цьому й сенс
+# шаблонізації — щоб переключити сховище, правимо лише values.yaml
+# (app.redisHost), а логіку шаблону чіпати не треба. APP_REDIS_URL і так
+# збирається з параметрів.
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: {{ include "course-app.fullname" . }}
+  labels:
+    {{- include "course-app.labels" . | nindent 4 }}
+
+spec:
+  replicas: {{ .Values.replicaCount }}        # було replicas: 5 (хардкод)
+
+  selector:
+    matchLabels:
+      {{- include "course-app.selectorLabels" . | nindent 6 }}
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  template:
+    metadata:
+      labels:
+        {{- include "course-app.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ include "course-app.name" . }}
+
+          # було: image: zlarkisz/course-app:1.0.1 (хардкод)
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          ports:
+            - name: http
+              containerPort: {{ .Values.container.port }}   # було 8080 (хардкод)
+              protocol: TCP
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+          # -------------------------------------------------------------------
+          # env — підключення до сховища
+          # -------------------------------------------------------------------
+          # homework-10: APP_REDIS_URL вказував на Bitnami Redis (redis-master).
+          # homework-11: значення redisHost у values.yaml змінено на Service
+          # Dragonfly. САМ ШАБЛОН не чіпали — host/port уже були параметрами.
+          # course-app не помічає підміни: Dragonfly Redis-сумісний, той
+          # самий протокол і порт 6379.
+          # -------------------------------------------------------------------
+          env:
+            - name: APP_STORE
+              value: {{ .Values.app.store | quote }}
+
+            # APP_REDIS_URL збирається з redisHost+redisPort з values.yaml.
+            - name: APP_REDIS_URL
+              value: "redis://{{ .Values.app.redisHost }}:{{ .Values.app.redisPort }}"
+
+            - name: APP_MESSAGE
+              value: {{ .Values.app.message | quote }}
+
+            {{- if .Values.app.redisAuth.enabled }}
+            # Пароль сховища. Значення НЕ хардкодимо і НЕ пишемо в маніфест —
+            # Kubernetes сам підставить його з Secret у рантаймі.
+            # secretKeyRef = "візьми значення з Secret <name>, ключ <key>".
+            # Dragonfly у цій домашці піднятий без auth → блок неактивний
+            # (redisAuth.enabled=false), як і Bitnami Redis у homework-10.
+            - name: APP_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.redisAuth.secretName | quote }}
+                  key: {{ .Values.app.redisAuth.secretKey | quote }}
+            {{- end }}
